@@ -34,9 +34,14 @@ Zero dependencies, standard library only.
 ```bash
 ./target/release/udp-speedtest 192.168.1.1 9999 10   # 10 second test
 ./target/release/udp-speedtest 192.168.1.1 9999 0    # unlimited, Ctrl+C to stop
+./target/release/udp-speedtest --size 1472 192.168.1.1 9999 10
 ```
 
-Use any unused UDP port on the target.
+Use any unused UDP port on the target. `--size` sets the UDP payload in
+bytes (default 1024, max 65507). Larger packets carry more throughput per
+syscall, which matters on older CPUs that cap out on packets-per-second —
+1472 (a full 1500-MTU Ethernet frame) can reach noticeably higher Mbps on
+the same link. Above 1472 packets fragment on standard networks.
 
 ## Output
 

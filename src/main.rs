@@ -28,7 +28,9 @@ extern "C" fn on_sigint(_: i32) {
 }
 
 fn usage() {
-    println!("usage: udp-speedtest <gateway-ip> <port> <duration-seconds, 0=unlimited>");
+    println!(
+        "usage: udp-speedtest [--size <bytes>] <gateway-ip> <port> <duration-seconds, 0=unlimited>"
+    );
 }
 
 fn graph(history: &[f64]) -> Vec<String> {
@@ -84,9 +86,9 @@ fn render(history: &[f64], cur: f64, avg: f64, min: f64, max: f64, elapsed: f64,
     let _ = io::stdout().flush();
 }
 
-fn sender(addr: SocketAddr, counters: Arc<Vec<AtomicU64>>, idx: usize) {
+fn sender(addr: SocketAddr, counters: Arc<Vec<AtomicU64>>, idx: usize, size: usize) {
     let sock = UdpSocket::bind("0.0.0.0:0").expect("bind udp socket");
-    let buf = [0xA5u8; PACKET_SIZE];
+    let buf = vec![0xA5u8; size];
     let mut local: u64 = 0;
     loop {
         for _ in 0..FLUSH_EVERY {
@@ -103,25 +105,34 @@ fn sender(addr: SocketAddr, counters: Arc<Vec<AtomicU64>>, idx: usize) {
 }
 
 fn main() {
-    let args: Vec<String> = env::args().collect();
-    if args.len() != 4 {
+    let mut args: Vec<String> = env::args().skip(1).collect();
+    let mut size = PACKET_SIZE;
+    if let Some(i) = args.iter().position(|a| a == "--size") {
+        size = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(0);
+        if size == 0 || size > 65507 {
+            eprintln!("--size must be 1..=65507 (UDP payload bytes)");
+            process::exit(1);
+        }
+        args.drain(i..=i + 1);
+    }
+    if args.len() != 3 {
         usage();
         process::exit(1);
     }
-    let port: u16 = args[2].parse().unwrap_or_else(|_| {
+    let port: u16 = args[1].parse().unwrap_or_else(|_| {
         usage();
         process::exit(1);
     });
-    let duration: u64 = args[3].parse().unwrap_or_else(|_| {
+    let duration: u64 = args[2].parse().unwrap_or_else(|_| {
         usage();
         process::exit(1);
     });
-    let addr: SocketAddr = (args[1].as_str(), port)
+    let addr: SocketAddr = (args[0].as_str(), port)
         .to_socket_addrs()
         .ok()
         .and_then(|mut a| a.next())
         .unwrap_or_else(|| {
-            eprintln!("cannot resolve {}", args[1]);
+            eprintln!("cannot resolve {}", args[0]);
             process::exit(1);
         });
 
@@ -136,7 +147,7 @@ fn main() {
     let mut handles = Vec::new();
     for i in 0..n {
         let counters = Arc::clone(&counters);
-        handles.push(thread::spawn(move || sender(addr, counters, i)));
+        handles.push(thread::spawn(move || sender(addr, counters, i, size)));
     }
 
     let start = Instant::now();
@@ -158,12 +169,12 @@ fn main() {
         if now.duration_since(last).as_secs_f64() >= SAMPLE {
             let total: u64 = counters.iter().map(|c| c.load(Ordering::Relaxed)).sum();
             let dt = now.duration_since(last).as_secs_f64();
-            let cur = (total - last_total) as f64 * PACKET_SIZE as f64 * 8.0 / dt / 1e6;
+            let cur = (total - last_total) as f64 * size as f64 * 8.0 / dt / 1e6;
             history.push(cur);
             if history.len() > W * 2 {
                 history.remove(0);
             }
-            let avg = total as f64 * PACKET_SIZE as f64 * 8.0 / elapsed / 1e6;
+            let avg = total as f64 * size as f64 * 8.0 / elapsed / 1e6;
             let min = history.iter().cloned().fold(f64::MAX, f64::min);
             let max = history.iter().cloned().fold(f64::MIN, f64::max);
             render(&history, cur, avg, min, max, elapsed, painted);
@@ -178,7 +189,7 @@ fn main() {
     }
     let total: u64 = counters.iter().map(|c| c.load(Ordering::Relaxed)).sum();
     let elapsed = start.elapsed().as_secs_f64();
-    let avg = total as f64 * PACKET_SIZE as f64 * 8.0 / elapsed / 1e6;
+    let avg = total as f64 * size as f64 * 8.0 / elapsed / 1e6;
     let (min, max) = match (
         history.iter().cloned().fold(f64::MAX, f64::min),
         history.iter().cloned().fold(f64::MIN, f64::max),
