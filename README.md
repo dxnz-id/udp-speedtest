@@ -5,6 +5,18 @@ blasts UDP packets at it for N seconds — no iperf server, no second device.
 Built for the common case where the machine running the test is the only
 device on the network and the router can't run any tools.
 
+## Run without installing
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/dxnz-id/udp-speedtest/main/run.sh | sh -s -- 192.168.1.1 9999 10
+```
+
+Downloads the release binary for your platform (checksum-verified) and runs
+it. Re-runs use the cached copy; a new release is picked up automatically.
+Everything it writes lives in `~/.cache/udp-speedtest` — delete that folder
+and nothing of this tool remains. Linux and macOS only; Windows users grab
+the zip from the releases page.
+
 ## Build
 
 ```bash
