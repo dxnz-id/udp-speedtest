@@ -87,7 +87,12 @@ fn render(history: &[f64], cur: f64, avg: f64, min: f64, max: f64, elapsed: f64,
 }
 
 fn sender(addr: SocketAddr, counters: Arc<Vec<AtomicU64>>, idx: usize, size: usize) {
-    let sock = UdpSocket::bind("0.0.0.0:0").expect("bind udp socket");
+    let bind = if addr.is_ipv6() {
+        "[::]:0"
+    } else {
+        "0.0.0.0:0"
+    };
+    let sock = UdpSocket::bind(bind).expect("bind udp socket");
     let buf = vec![0xA5u8; size];
     let mut local: u64 = 0;
     loop {
@@ -211,6 +216,9 @@ fn main() {
         (f64::MAX, f64::MIN) => (avg, avg),
         (min, max) => (min, max),
     };
+    if total == 0 {
+        eprintln!("no packets were sent — check the target address");
+    }
     println!(
         "{} packets in {:.1}s | min {:.1}, avg {:.1}, max {:.1} Mbps",
         total, elapsed, min, avg, max

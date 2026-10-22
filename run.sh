@@ -45,12 +45,18 @@ tar_sha=$(grep "$asset" "$tmp/SHA256SUMS" | cut -d' ' -f1)
 
 # cache key = tarball checksum, so a new release is picked up automatically
 dir="$CACHE/$target-$tar_sha"
+# extract to dir.new, then rename: an interrupted run never leaves a
+# half-written binary in the cache
 if [ ! -x "$dir/udp-speedtest" ]; then
-  mkdir -p "$dir"
   curl -fsSL "$base/$asset" -o "$tmp/$asset"
   grep "$asset" "$tmp/SHA256SUMS" | (cd "$tmp" && sha256 -c) >/dev/null
-  tar xzf "$tmp/$asset" -C "$dir"
-  chmod +x "$dir/udp-speedtest"
+  mkdir -p "$CACHE"
+  rm -rf "$dir.new"
+  mkdir -p "$dir.new"
+  tar xzf "$tmp/$asset" -C "$dir.new"
+  chmod +x "$dir.new/udp-speedtest"
+  rm -rf "$dir"
+  mv "$dir.new" "$dir"
 fi
 
 exec "$dir/udp-speedtest" "$@"

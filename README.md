@@ -28,7 +28,7 @@ Zero dependencies, standard library only.
 ## Usage
 
 ```bash
-./target/release/udp-speedtest <target-ip> <port> <duration-seconds>
+./target/release/udp-speedtest [--size <bytes>] <target-ip> <port> <duration-seconds>
 ```
 
 ```bash
@@ -80,11 +80,12 @@ plain atomics — no locks, no shared buffers.
 
 - Measures **this machine → target** only. The reverse direction needs a
   receiver on this side, which is the thing this tool exists to avoid.
-- A single thread already saturates gigabit; extra threads only pay off at
-  2.5G and above. If all cores hit 100% while throughput stalls, the CPU is
-  the limit, not the link.
+- On modern CPUs a single thread can saturate gigabit; extra threads pay off
+  at 2.5G and above. If all cores hit 100% while throughput stalls, the CPU
+  is the limit, not the link.
 - A target that rejects the port (ICMP port unreachable) fails some sends
   and the counted rate reads low. Pick another port if results look wrong.
+- Only run this against networks you own or have permission to test.
 
 ## License
 
