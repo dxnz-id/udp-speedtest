@@ -2,8 +2,8 @@ use std::env;
 use std::io::{self, Write};
 use std::net::{SocketAddr, ToSocketAddrs, UdpSocket};
 use std::process;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -13,13 +13,8 @@ const H: usize = 10; // graph height (rows)
 const W: usize = 56; // graph width (braille columns = 112 data points)
 const FLUSH_EVERY: u64 = 4096; // check stop/duration every N packets, not every packet
 
-// braille dot bits per (row from bottom, left/right column inside the cell)
-const DOTS: [[u16; 2]; 4] = [
-    [0x40, 0x80],
-    [0x04, 0x20],
-    [0x02, 0x10],
-    [0x01, 0x08],
-];
+// braille dot bits per (left/right column, row from bottom)
+const DOT_COL: [[u16; 4]; 2] = [[0x40, 0x04, 0x02, 0x01], [0x80, 0x20, 0x10, 0x08]];
 
 static STOP: AtomicBool = AtomicBool::new(false);
 
@@ -33,7 +28,7 @@ extern "C" fn on_sigint(_: i32) {
 }
 
 fn usage() {
-    println!("usage: speedtest-rust <gateway-ip> <port> <duration-seconds, 0=unlimited>");
+    println!("usage: udp-speedtest <gateway-ip> <port> <duration-seconds, 0=unlimited>");
 }
 
 fn graph(history: &[f64]) -> Vec<String> {
@@ -52,12 +47,12 @@ fn graph(history: &[f64]) -> Vec<String> {
         let mut line = String::with_capacity(W * 3);
         for c in 0..W {
             let mut cell = 0u16;
-            for k in 0..2 {
+            for (k, col) in DOT_COL.iter().enumerate() {
                 if let Some(&v) = (c * 2 + k).checked_sub(skip).and_then(|i| window.get(i)) {
                     let level = (v / ceiling * (H * 4 - 1) as f64 + 0.5) as usize;
-                    for b in 0..4 {
+                    for (b, &bit) in col.iter().enumerate() {
                         if level >= (H - 1 - r) * 4 + b {
-                            cell |= DOTS[b][k];
+                            cell |= bit;
                         }
                     }
                 }
@@ -66,11 +61,7 @@ fn graph(history: &[f64]) -> Vec<String> {
         }
         rows.push(format!("\x1b[32m{}\x1b[0m", line));
     }
-    rows.push(format!(
-        "\x1b[90m{} {:>5}\x1b[0m",
-        "─".repeat(W),
-        0
-    ));
+    rows.push(format!("\x1b[90m{} {:>5}\x1b[0m", "─".repeat(W), 0));
     rows
 }
 
@@ -136,7 +127,9 @@ fn main() {
 
     unsafe { signal(2, on_sigint) };
 
-    let n = thread::available_parallelism().map(|n| n.get()).unwrap_or(1);
+    let n = thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
     let counters: Arc<Vec<AtomicU64>> = Arc::new((0..n).map(|_| AtomicU64::new(0)).collect());
     println!("{} threads → {}", n, addr);
 
@@ -186,8 +179,10 @@ fn main() {
     let total: u64 = counters.iter().map(|c| c.load(Ordering::Relaxed)).sum();
     let elapsed = start.elapsed().as_secs_f64();
     let avg = total as f64 * PACKET_SIZE as f64 * 8.0 / elapsed / 1e6;
-    let (min, max) = match (history.iter().cloned().fold(f64::MAX, f64::min),
-                           history.iter().cloned().fold(f64::MIN, f64::max)) {
+    let (min, max) = match (
+        history.iter().cloned().fold(f64::MAX, f64::min),
+        history.iter().cloned().fold(f64::MIN, f64::max),
+    ) {
         (f64::MAX, f64::MIN) => (avg, avg),
         (min, max) => (min, max),
     };
