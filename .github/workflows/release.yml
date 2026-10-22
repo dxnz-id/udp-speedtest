@@ -40,7 +40,7 @@ jobs:
             cross: true
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install musl tools
         if: matrix.musl
         run: sudo apt-get update && sudo apt-get install -y musl-tools
@@ -66,7 +66,7 @@ jobs:
           else
             tar czf "udp-speedtest-${{ matrix.target }}.tar.gz" -C pkg .
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: udp-speedtest-${{ matrix.target }}
           path: udp-speedtest-${{ matrix.target }}.*
@@ -75,8 +75,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
