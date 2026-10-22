@@ -104,17 +104,31 @@ fn sender(addr: SocketAddr, counters: Arc<Vec<AtomicU64>>, idx: usize, size: usi
     }
 }
 
-fn main() {
-    let mut args: Vec<String> = env::args().skip(1).collect();
-    let mut size = PACKET_SIZE;
+// strips the optional --size flag from args in place, returns the payload size
+fn parse_size(args: &mut Vec<String>) -> Result<usize, String> {
     if let Some(i) = args.iter().position(|a| a == "--size") {
-        size = args.get(i + 1).and_then(|v| v.parse().ok()).unwrap_or(0);
+        let Some(value) = args.get(i + 1) else {
+            return Err("--size needs a value".into());
+        };
+        let size: usize = value.parse().unwrap_or(0);
         if size == 0 || size > 65507 {
-            eprintln!("--size must be 1..=65507 (UDP payload bytes)");
-            process::exit(1);
+            return Err("--size must be 1..=65507 (UDP payload bytes)".into());
         }
         args.drain(i..=i + 1);
+        return Ok(size);
     }
+    Ok(PACKET_SIZE)
+}
+
+fn main() {
+    let mut args: Vec<String> = env::args().skip(1).collect();
+    let size = match parse_size(&mut args) {
+        Ok(size) => size,
+        Err(msg) => {
+            eprintln!("{msg}");
+            process::exit(1);
+        }
+    };
     if args.len() != 3 {
         usage();
         process::exit(1);
@@ -233,5 +247,33 @@ mod tests {
     fn window_right_aligned_when_short() {
         let rows = graph(&[100.0]);
         assert!(line_body(&rows[1]).starts_with('⠀')); // left columns are empty
+    }
+
+    fn args(v: &[&str]) -> Vec<String> {
+        v.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn size_flag_parsed_and_removed() {
+        let mut a = args(&["--size", "1472", "ip", "1", "10"]);
+        assert_eq!(parse_size(&mut a).unwrap(), 1472);
+        assert_eq!(a, ["ip", "1", "10"]);
+
+        let mut none = args(&["ip", "1", "10"]);
+        assert_eq!(parse_size(&mut none).unwrap(), PACKET_SIZE);
+        assert_eq!(none, ["ip", "1", "10"]); // untouched without the flag
+    }
+
+    #[test]
+    fn size_flag_rejects_missing_or_bad_value() {
+        let mut missing = args(&["--size"]);
+        assert_eq!(
+            parse_size(&mut missing).unwrap_err(),
+            "--size needs a value"
+        );
+        for bad in ["0", "65508", "abc"] {
+            let mut a = args(&["--size", bad, "ip", "1", "10"]);
+            assert!(parse_size(&mut a).is_err(), "{bad} should be rejected");
+        }
     }
 }
