@@ -1,0 +1,56 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            bin: udp-speedtest
+            ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            bin: udp-speedtest
+            ext: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            bin: udp-speedtest.exe
+            ext: zip
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: cargo test --release
+      - run: cargo build --release
+      - shell: bash
+        run: |
+          mkdir pkg
+          cp "target/release/${{ matrix.bin }}" pkg/
+          if [ "${{ matrix.ext }}" = "zip" ]; then
+            7z a "udp-speedtest-${{ matrix.target }}.zip" pkg/*
+          else
+            tar czf "udp-speedtest-${{ matrix.target }}.tar.gz" -C pkg .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: udp-speedtest-${{ matrix.target }}
+          path: udp-speedtest-${{ matrix.target }}.*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
