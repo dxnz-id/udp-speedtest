@@ -1,0 +1,74 @@
+# udp-speedtest
+
+One-sided UDP throughput test for your LAN. Point it at your gateway and it
+blasts UDP packets at it for N seconds — no iperf server, no second device.
+Built for the common case where the machine running the test is the only
+device on the network and the router can't run any tools.
+
+## Build
+
+```bash
+cargo build --release
+```
+
+Zero dependencies, standard library only.
+
+## Usage
+
+```bash
+./target/release/udp-speedtest <target-ip> <port> <duration-seconds>
+```
+
+```bash
+./target/release/udp-speedtest 192.168.1.1 9999 10   # 10 second test
+./target/release/udp-speedtest 192.168.1.1 9999 0    # unlimited, Ctrl+C to stop
+```
+
+Use any unused UDP port on the target.
+
+## Output
+
+A braille area graph (btop style) redrawn every 0.5s, with the current rate
+live underneath. Top border is the scale (rounded up to a multiple of 10),
+bottom border is 0:
+
+```
+4 threads → 192.168.1.1:9999
+──────────────────────────────────────────────────────   170
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢠⡄
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣿⣿⡄
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣴⣾⣿⣿⣿⣿⣷
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣿⣿⣿⣿⣿⣿⣿⣿
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⠀⠀⠀⠀⠀⠀⢀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣀⣠⣴⣾⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿
+──────────────────────────────────────────────────────     0
+   166.5 Mbps │ min  66.1  avg 115.7  max 166.5 │  1.5s
+192512 packets in 10.0s | min 46.6, avg 108.0, max 170.2 Mbps
+```
+
+Ctrl+C during an unlimited run prints the same summary.
+
+## How it works
+
+One sender thread per CPU core, each with its own UDP socket, running a
+tight send loop. The main thread only samples counters and draws the graph,
+so rendering never eats into the measured rate. Stop flag and counters are
+plain atomics — no locks, no shared buffers.
+
+## Notes
+
+- Measures **this machine → target** only. The reverse direction needs a
+  receiver on this side, which is the thing this tool exists to avoid.
+- A single thread already saturates gigabit; extra threads only pay off at
+  2.5G and above. If all cores hit 100% while throughput stalls, the CPU is
+  the limit, not the link.
+- A target that rejects the port (ICMP port unreachable) fails some sends
+  and the counted rate reads low. Pick another port if results look wrong.
+
+## License
+
+MIT
