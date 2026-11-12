@@ -14,8 +14,9 @@ curl -fsSL https://raw.githubusercontent.com/dxnz-id/udp-speedtest/main/run.sh |
 Downloads the release binary for your platform (checksum-verified) and runs
 it. Re-runs use the cached copy; a new release is picked up automatically.
 Everything it writes lives in `~/.cache/udp-speedtest` — delete that folder
-and nothing of this tool remains. Linux and macOS only; Windows users grab
-the zip from the releases page.
+and nothing of this tool remains. Linux, macOS, and Termux on Android
+(aarch64/x86_64) are supported; Windows users grab the zip from the releases
+page.
 
 ## Build
 

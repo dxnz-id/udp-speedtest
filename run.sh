@@ -25,8 +25,13 @@ case "$(uname -m)" in
   aarch64 | arm64)      arch=aarch64 ;;
   *) echo "udp-speedtest: unsupported arch '$(uname -m)'" >&2; exit 1 ;;
 esac
+# Termux is Android (bionic libc), so glibc binaries don't run there — use static musl
+termux=
+if [ -n "${TERMUX_VERSION:-}" ] || [ "${PREFIX:-}" = "/data/data/com.termux/files/usr" ]; then
+  termux=1
+fi
 # musl on x86_64 linux so any distro works without matching glibc
-if [ "$os" = linux ] && [ "$arch" = x86_64 ]; then
+if [ "$os" = linux ] && { [ "$arch" = x86_64 ] || [ "$termux" = 1 ]; }; then
   target="$arch-unknown-linux-musl"
 elif [ "$os" = linux ]; then
   target="$arch-unknown-linux-gnu"
